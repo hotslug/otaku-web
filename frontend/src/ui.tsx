@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { facts, type Card } from './api.ts'
+import { countdown, facts, type Card } from './api.ts'
 import { setStatus, statuses, toggleFavourite, useList } from './myList.ts'
 
 export function SectionTitle({ children, note }: { children: ReactNode; note?: ReactNode }) {
@@ -52,6 +52,29 @@ export function Row({ title, items, note }: { title: ReactNode; items: Card[]; n
           {items.map(a => <CardLink key={a.id} a={a} note={note?.(a)} />)}
         </div>
         {!ends.end && <button className="pager right" aria-label="More" onClick={() => page(1)}>›</button>}
+      </div>
+    </section>
+  )
+}
+
+// Wide banner cards for what you're watching, with when the next episode is due.
+export function WideRow({ title, items }: { title: string; items: Card[] }) {
+  if (!items.length) return null
+  const now = Date.now() / 1000
+  return (
+    <section className="row">
+      <SectionTitle>{title}</SectionTitle>
+      <div className="strip wide">
+        {items.map(a => (
+          <Link key={a.id} to={`/anime/${a.id}`} state={a} className="wide-card" style={{ backgroundColor: a.color ?? undefined }}>
+            {(a.banner ?? a.poster) && <img src={a.banner ?? a.poster!} alt="" loading="lazy" onLoad={ev => ev.currentTarget.classList.add('in')} />}
+            <div className="wide-shade" />
+            <div className="wide-body">
+              <strong>{a.title}</strong>
+              <small>{a.nextEpisode && a.nextAiring && a.nextAiring > now ? `Episode ${a.nextEpisode} ${countdown(a.nextAiring, now)}` : [a.format, a.status].filter(Boolean).join(' · ')}</small>
+            </div>
+          </Link>
+        ))}
       </div>
     </section>
   )

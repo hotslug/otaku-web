@@ -6,6 +6,7 @@ export type Card = {
   id: number
   title: string
   native?: string | null
+  romaji?: string | null
   start?: string | null // "2023-09-29", "2023-09" or "2023"
   status?: string | null
   episodes?: number | null
@@ -16,6 +17,7 @@ export type Card = {
   color?: string | null
   banner?: string | null
   synopsis?: string | null
+  synopsisSource?: string | null
   trailer?: Trailer | null
   nextEpisode?: number | null
   nextAiring?: number | null // unix seconds
@@ -31,6 +33,26 @@ export type Detail = Card & {
 }
 
 export type Row = { title: string; items: Card[] }
+export type Airing = { episode: number; at: number; anime: Card }
+export type Watch = { name: string; year?: string | null; stream: Provider[]; buy: Provider[]; link?: string | null }
+export type Provider = { name: string; logo?: string | null }
+
+// "in 2d 4h", "in 3h 12m", "in 5m"
+export function countdown(at: number, now = Date.now() / 1000) {
+  const s = at - now
+  if (s <= 60) return s > -1800 ? 'airing now' : 'aired'
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60)
+  return 'in ' + (d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`)
+}
+
+// The visitor's country, from the browser's language ("en-GB" → "GB").
+export function region() {
+  try { return new Intl.Locale(navigator.language).maximize().region ?? 'US' } catch { return 'US' }
+}
+
+export function regionName(r: string) {
+  try { return new Intl.DisplayNames([navigator.language], { type: 'region' }).of(r) ?? r } catch { return r }
+}
 
 type Answer<T> = { data: T; stale: boolean }
 

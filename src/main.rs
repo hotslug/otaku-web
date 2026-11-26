@@ -1,6 +1,7 @@
 // Otaku on the web: a small Rust server in front of AniList, serving the React site from frontend/dist.
 
 mod anilist;
+mod tmdb;
 
 use std::{collections::HashMap, future::Future, sync::Arc, time::{Duration, Instant, SystemTime, UNIX_EPOCH}};
 
@@ -77,6 +78,52 @@ async fn detail(State(app): Shared, Path(id): Path<i64>) -> Response {
     reply(r, 3600)
 }
 
+// This week's episodes from `from` (the browser's midnight, unix seconds), a week ahead.
+async fn schedule(State(app): Shared, Query(p): Query<HashMap<String, String>>) -> Response {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+    let Some(from) = p.get("from").and_then(|v| v.parse::<i64>().ok()).filter(|f| (now - 2 * 86_400..=now + 86_400).contains(f)) else {
+        return bad("Bad start time")
+    };
+    let r = app.cached(format!("schedule:{from}"), Duration::from_secs(30 * 60), async {
+        anilist::schedule(&app.http, from, from + 7 * 86_400).await.map(|a| json!({ "items": a }))
+    }).await;
+    reply(r, 600)
+}
+
+// "Because you liked…" for up to 3 shows: ?ids=1,2
+async fn recommended(State(app): Shared, Query(p): Query<HashMap<String, String>>) -> Response {
+    let ids: Vec<i64> = p.get("ids").map(|v| v.split(',').filter_map(|x| x.parse().ok()).filter(|x| (1..100_000_000).contains(x)).collect()).unwrap_or_default();
+    if ids.is_empty() || ids.len() > 3 { return bad("1 to 3 ids") }
+    let key = format!("recommended:{ids:?}");
+    let r = app.cached(key, Duration::from_secs(6 * 3600), async {
+        anilist::recommended(&app.http, &ids).await.map(|rows| json!({ "rows": rows }))
+    }).await;
+    reply(r, 3600)
+}
+
+// Where to watch in one country (?region=GB). Only when the server has a TMDB key.
+async fn watch(State(app): Shared, Path(id): Path<i64>, Query(p): Query<HashMap<String, String>>) -> Response {
+    let Some(key) = std::env::var("TMDB_KEY").ok().filter(|k| !k.is_empty()) else {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "No TMDB key on this server" }))).into_response()
+    };
+    let region = p.get("region").map(|r| r.to_uppercase()).filter(|r| r.len() == 2 && r.chars().all(|c| c.is_ascii_uppercase()));
+    let Some(region) = region else { return bad("Bad region") };
+    if !(1..100_000_000).contains(&id) { return bad("Bad id") }
+    // The show's titles come from its (cached) AniList page.
+    let page = app.cached(format!("anime:{id}"), Duration::from_secs(6 * 3600), async {
+        anilist::detail(&app.http, id).await.map(|d| serde_json::to_value(d).unwrap())
+    }).await;
+    let Ok((a, _)) = page else { return reply(page, 0) };
+    let titles: Vec<String> = [&a["title"], &a["romaji"]].iter().filter_map(|t| t.as_str().map(String::from)).collect();
+    let movie = a["format"] == "Movie";
+    let r = app.cached(format!("watch:{id}:{region}"), Duration::from_secs(24 * 3600), async {
+        tmdb::watch(&app.http, &key, &titles, movie, &region).await.map(|w| json!({ "watch": w, "region": region }))
+    }).await;
+    reply(r, 3600)
+}
+
+fn bad(why: &str) -> Response { (StatusCode::BAD_REQUEST, Json(json!({ "error": why }))).into_response() }
+
 pub const GENRES: [&str; 18] = ["Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy", "Horror", "Mahou Shoujo", "Mecha", "Music",
                                 "Mystery", "Psychological", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller"];
 
@@ -133,6 +180,9 @@ async fn main() {
         .route("/api/home", get(home))
         .route("/api/search", get(search))
         .route("/api/anime/{id}", get(detail))
+        .route("/api/anime/{id}/watch", get(watch))
+        .route("/api/schedule", get(schedule))
+        .route("/api/recommended", get(recommended))
         .with_state(app)
         .fallback_service(site)
         .layer(CompressionLayer::new());

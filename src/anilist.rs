@@ -16,6 +16,7 @@ pub struct Card {
     pub id: i64,
     pub title: String,
     pub native: Option<String>,
+    pub romaji: Option<String>, // for matching on other sites
     pub start: Option<String>, // "2023-09-29", "2023-09" or "2023"
     pub status: Option<String>,
     pub episodes: Option<i64>,
@@ -26,6 +27,7 @@ pub struct Card {
     pub color: Option<String>, // the poster's main colour, for placeholders
     pub banner: Option<String>,
     pub synopsis: Option<String>,
+    pub synopsis_source: Option<String>, // "(Source: Crunchyroll)" at the end, shown as a credit
     pub trailer: Option<Trailer>,
     pub next_episode: Option<i64>,
     pub next_airing: Option<i64>, // unix seconds
@@ -168,10 +170,12 @@ fn list(v: &Value) -> Vec<Card> { arr(v).iter().map(card).collect() }
 
 pub fn card(m: &Value) -> Card {
     let t = &m["title"];
+    let synopsis = s(m, "description").map(|d| split_source(&plain(&d)));
     Card {
         id: m["id"].as_i64().unwrap_or(0),
         title: s(t, "english").or_else(|| s(t, "romaji")).unwrap_or_else(|| "?".into()),
         native: s(t, "native"),
+        romaji: s(t, "romaji"),
         start: date(&m["startDate"]),
         status: s(m, "status").map(|x| nice(&x)),
         episodes: m["episodes"].as_i64(),
@@ -181,7 +185,8 @@ pub fn card(m: &Value) -> Card {
         poster: s(&m["coverImage"], "large"),
         color: s(&m["coverImage"], "color"),
         banner: s(m, "bannerImage"),
-        synopsis: s(m, "description").map(|d| plain(&d)),
+        synopsis: synopsis.as_ref().map(|x| x.0.clone()),
+        synopsis_source: synopsis.and_then(|x| x.1),
         trailer: trailer(&m["trailer"]),
         next_episode: m["nextAiringEpisode"]["episode"].as_i64(),
         next_airing: m["nextAiringEpisode"]["airingAt"].as_i64(),
@@ -244,6 +249,53 @@ pub fn plain(html: &str) -> String {
     text
 }
 
+// "...adventure.\n\n(Source: Crunchyroll)" → ("...adventure.", Some("Crunchyroll")). Also "[Written by MAL Rewrite]".
+pub fn split_source(text: &str) -> (String, Option<String>) {
+    let t = text.trim_end();
+    let Some(close) = t.chars().last().filter(|c| *c == ')' || *c == ']') else { return (t.to_string(), None) };
+    let open = if close == ')' { '(' } else { '[' };
+    let Some(start) = t.rfind(open) else { return (t.to_string(), None) };
+    let inner = &t[start + 1..t.len() - 1];
+    let lower = inner.to_lowercase();
+    let Some(rest) = ["source", "written by"].iter().find_map(|k| lower.starts_with(k).then(|| &inner[k.len()..])) else { return (t.to_string(), None) };
+    let src = rest.trim_start_matches([':', ' ']).trim();
+    let body = t[..start].trim_end().to_string();
+    if src.is_empty() || body.is_empty() { return (t.to_string(), None) }
+    (body, Some(src.to_string()))
+}
+
+// "Because you liked…": AniList's community picks for a few shows, in one request.
+pub async fn recommended(http: &reqwest::Client, ids: &[i64]) -> R<Vec<Row>> {
+    let q: Vec<String> = ids.iter().enumerate().map(|(i, id)| format!(
+        "r{i}: Media(id:{id}){{title{{english romaji}} recommendations(sort:RATING_DESC,perPage:20){{nodes{{mediaRecommendation{{type isAdult {CARD} {HERO}}}}}}}}}")).collect();
+    let d = query(http, &format!("{{{}}}", q.join(" ")), json!({})).await?;
+    Ok((0..ids.len()).filter_map(|i| {
+        let m = &d[format!("r{i}")];
+        let title = s(&m["title"], "english").or_else(|| s(&m["title"], "romaji"))?;
+        let items: Vec<Card> = arr(&m["recommendations"]["nodes"]).iter().map(|n| &n["mediaRecommendation"]).filter(|r| anime(r)).map(card).collect();
+        Some(Row { title: format!("Because you liked {title}"), items })
+    }).collect())
+}
+
+#[derive(Serialize)]
+pub struct Airing { pub episode: i64, pub at: i64, pub anime: Card }
+
+// Every episode airing in a window (a week is ~5 pages of 50).
+pub async fn schedule(http: &reqwest::Client, from: i64, to: i64) -> R<Vec<Airing>> {
+    let q = format!("query($p:Int,$a:Int,$b:Int){{Page(page:$p,perPage:50){{pageInfo{{hasNextPage}} airingSchedules(airingAt_greater:$a,airingAt_lesser:$b,sort:TIME){{episode airingAt media{{isAdult type {CARD} bannerImage}}}}}}}}");
+    let mut out = vec![];
+    for p in 1..=8 {
+        let d = query(http, &q, json!({ "p": p, "a": from, "b": to })).await?;
+        for a in arr(&d["Page"]["airingSchedules"]) {
+            let m = &a["media"];
+            if m["isAdult"] == true { continue }
+            if let (Some(episode), Some(at)) = (a["episode"].as_i64(), a["airingAt"].as_i64()) { out.push(Airing { episode, at, anime: card(m) }) }
+        }
+        if d["Page"]["pageInfo"]["hasNextPage"] != true { break }
+    }
+    Ok(out)
+}
+
 // No banner of its own: borrow one from the same series (season 1 for a season 2, the show for its movie…).
 fn borrowed_banner(edges: &[Value]) -> Option<String> {
     let order = ["PREQUEL", "PARENT", "SEQUEL", "SIDE_STORY", "ALTERNATIVE", "SPIN_OFF"];
@@ -288,7 +340,7 @@ mod tests {
         assert_eq!(c.format.as_deref(), Some("TV short"));
         assert_eq!(c.status.as_deref(), Some("Finished"));
         assert_eq!(c.trailer, Some(Trailer { id: "abc".into(), site: "youtube".into() }));
-        assert_eq!(c.synopsis.as_deref(), Some("Elf mage.\n\n(Source: Crunchyroll)&more"));
+        assert_eq!(c.synopsis.as_deref(), Some("Elf mage.\n\n(Source: Crunchyroll)&more")); // not at the end: stays in the text
     }
 
     #[test]
@@ -297,6 +349,14 @@ mod tests {
         let r = related_list(&[e("SEQUEL", 2, "ANIME"), e("ADAPTATION", 3, "MANGA"), e("PREQUEL", 1, "ANIME")]);
         assert_eq!(r.iter().map(|x| x.anime.id).collect::<Vec<_>>(), vec![1, 2]);
         assert_eq!(r[0].relation, "Prequel");
+    }
+
+    #[test]
+    fn synopsis_source() {
+        assert_eq!(split_source("An elf.\n\n(Source: Crunchyroll)"), ("An elf.".into(), Some("Crunchyroll".into())));
+        assert_eq!(split_source("Text [Written by MAL Rewrite]"), ("Text".into(), Some("MAL Rewrite".into())));
+        assert_eq!(split_source("A (quiet) story."), ("A (quiet) story.".into(), None));
+        assert_eq!(split_source("Ends (in a bracket)"), ("Ends (in a bracket)".into(), None));
     }
 
     #[test]

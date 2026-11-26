@@ -1,18 +1,37 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { StrictMode, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, NavLink, Outlet, RouterProvider, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Discover, MyList, Show } from './pages.tsx'
+import { Schedule } from './schedule.tsx'
 import './styles.css'
 
 function Layout() {
   const { pathname } = useLocation()
   useEffect(() => window.scrollTo(0, 0), [pathname])
+  // Over a page's big picture, the header is see-through until you scroll.
+  const [over, setOver] = useState(false)
+  const header = useRef<HTMLElement>(null)
+  useEffect(() => { // pictures that run under the header grow by its real height (it wraps on phones)
+    const h = header.current!
+    const size = new ResizeObserver(() => document.documentElement.style.setProperty('--header-h', `${h.offsetHeight}px`))
+    size.observe(h)
+    return () => size.disconnect()
+  }, [])
+  useEffect(() => {
+    const look = () => setOver(window.scrollY < 40 && !!document.querySelector('.top + .hero, .top + .carousel'))
+    look()
+    const watch = new MutationObserver(look)
+    watch.observe(document.getElementById('root')!, { childList: true, subtree: true })
+    window.addEventListener('scroll', look, { passive: true })
+    return () => { watch.disconnect(); window.removeEventListener('scroll', look) }
+  }, [])
   return (
     <>
-      <header className="top">
-        <NavLink to="/" className="brand" end><img src="/icon-192.png" alt="" />Otaku</NavLink>
+      <header ref={header} className={'top' + (over ? ' over' : '')}>
+        <NavLink to="/" className="brand" end><img src="/icon-192.png" alt="" /><span>Otaku</span></NavLink>
         <nav className="chips">
           <NavLink to="/" end className={({ isActive }) => 'chip' + (isActive ? ' active' : '')}>Discover</NavLink>
+          <NavLink to="/schedule" className={({ isActive }) => 'chip' + (isActive ? ' active' : '')}>Schedule</NavLink>
           <NavLink to="/list" className={({ isActive }) => 'chip' + (isActive ? ' active' : '')}>My list</NavLink>
         </nav>
         <SearchBox />
@@ -29,6 +48,15 @@ function SearchBox() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [text, setText] = useState(params.get('q') ?? '')
+  const box = useRef<HTMLInputElement>(null)
+  useEffect(() => { // "/" jumps to the search box, as on many sites
+    const key = (e: KeyboardEvent) => {
+      if (e.key === '/' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) { e.preventDefault(); box.current?.focus() }
+      if (e.key === 'Escape' && e.target === box.current) box.current?.blur()
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [])
   useEffect(() => setText(params.get('q') ?? ''), [params])
   useEffect(() => {
     const q = text.trim()
@@ -40,13 +68,14 @@ function SearchBox() {
     }, 450)
     return () => clearTimeout(t)
   }, [text]) // eslint-disable-line react-hooks/exhaustive-deps
-  return <input className="search" type="search" placeholder="Search anime" value={text} onChange={e => setText(e.target.value)} aria-label="Search anime" />
+  return <input ref={box} className="search" type="search" placeholder="Search anime   ( / )" value={text} onChange={e => setText(e.target.value)} aria-label="Search anime" />
 }
 
 const router = createBrowserRouter([
   { element: <Layout />, children: [
     { path: '/', element: <Discover /> },
     { path: '/list', element: <MyList /> },
+    { path: '/schedule', element: <Schedule /> },
     { path: '/anime/:id', element: <Show /> },
     { path: '*', element: <main className="page"><p className="quiet">Page not found.</p></main> },
   ] },
