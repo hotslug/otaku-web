@@ -40,7 +40,7 @@ export function Row({ title, items, note }: { title: ReactNode; items: Card[]; n
     const s = strip.current
     if (s) setEnds({ start: s.scrollLeft < 4, end: s.scrollLeft + s.clientWidth > s.scrollWidth - 4 })
   }
-  useEffect(look, [items])
+  useEffect(() => { look() }, [items])
   const page = (dir: number) => strip.current?.scrollBy({ left: dir * (strip.current.clientWidth - 80), behavior: 'smooth' })
   if (!items.length) return null
   return (

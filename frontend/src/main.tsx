@@ -7,7 +7,7 @@ import './styles.css'
 
 function Layout() {
   const { pathname } = useLocation()
-  useEffect(() => window.scrollTo(0, 0), [pathname])
+  useEffect(() => { window.scrollTo(0, 0) }, [pathname]) // braces: newer Chrome returns a Promise from scrollTo, and React would call it as a cleanup
   // Over a page's big picture, the header is see-through until you scroll.
   const [over, setOver] = useState(false)
   const header = useRef<HTMLElement>(null)
