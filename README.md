@@ -2,7 +2,7 @@
 
 Find the world's favourite anime and where to watch them. A Rust server in front of AniList's GraphQL API, with a React front end.
 
-The web version of Otaku, my SwiftUI Mac app: the same app on a second platform, with the server in Rust.
+The web version of Otaku, my [SwiftUI Mac app](https://github.com/hotslug/otaku): the same app on a second platform, with the server in Rust.
 
 ![Discover: trending carousel, filters and rows](docs/discover.jpg)
 
