@@ -67,9 +67,9 @@ cargo test                   # parsing, filter checks, dates, synopsis credits, 
 cd frontend && npm test      # My list
 ```
 
-`npm run smoke` clicks through the site in Chrome (Discover → a show → My list → back → Schedule → search) and fails on any page error; run it with the server up.
+`npm run smoke` (in `frontend/`) clicks through the site in Chrome (Discover → a show → My list → back → Schedule → search) and fails on any page error; run it with the server up.
 
-The screenshots above come from `npm run screenshots` (Playwright, driving your installed Chrome) while the server is running.
+The screenshots above come from `npm run screenshots`, also in `frontend/` with the server up. Both use Playwright with your installed Chrome.
 
 ## Credits
 
