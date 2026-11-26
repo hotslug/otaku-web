@@ -1,4 +1,3 @@
-// Where to watch in one country: TMDB's watch providers (data from JustWatch). Optional: needs TMDB_KEY.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -10,23 +9,21 @@ pub struct Provider { pub name: String, pub logo: Option<String> }
 
 #[derive(Serialize)]
 pub struct Watch {
-    pub name: String, // the show TMDB matched, so a wrong match is visible
+    pub name: String,
     pub year: Option<String>,
     pub stream: Vec<Provider>,
     pub buy: Vec<Provider>,
-    pub link: Option<String>, // TMDB's page, which credits JustWatch
+    pub link: Option<String>,
 }
 
 async fn get(http: &reqwest::Client, key: &str, path: &str, q: &[(&str, &str)]) -> R<Value> {
     let mut r = http.get(format!("https://api.themoviedb.org/3/{path}")).query(q);
-    // The short v3 "API key" or the long v4 "read access token" both work.
     r = if key.len() > 40 { r.bearer_auth(key) } else { r.query(&[("api_key", key)]) };
     let res = r.send().await.map_err(|e| format!("TMDB unreachable: {e}"))?;
     if !res.status().is_success() { return Err(format!("TMDB answered {}", res.status())) }
     res.json().await.map_err(|e| e.to_string())
 }
 
-// "Attack on Titan Season 3 Part 2" → also "Attack on Titan": TMDB keeps every season under one show.
 pub fn search_terms(titles: &[String]) -> Vec<String> {
     let mut out: Vec<String> = vec![];
     for t in titles {
@@ -40,7 +37,7 @@ pub fn search_terms(titles: &[String]) -> Vec<String> {
         }).unwrap_or(words.len());
         let base = words[..cut].join(" ");
         for c in [t.trim().to_string(), base.clone(), base.split(':').next().unwrap_or("").trim().to_string()] {
-            if c.chars().count() >= 3 && !out.contains(&c) { out.push(c) } // "Re" from "Re:ZERO" would match anything
+            if c.chars().count() >= 3 && !out.contains(&c) { out.push(c) }
         }
     }
     out
@@ -51,7 +48,6 @@ pub async fn watch(http: &reqwest::Client, key: &str, titles: &[String], movie: 
     let mut best: Option<Value> = None;
     for q in search_terms(titles) {
         let found = get(http, key, &format!("search/{kind}"), &[("query", &q)]).await?;
-        // Animated (genre 16) and Japanese first, else TMDB's order.
         let results = found["results"].as_array().cloned().unwrap_or_default();
         let score = |r: &Value| i32::from(r["genre_ids"].as_array().is_some_and(|g| g.contains(&16.into()))) * 2 + i32::from(r["original_language"] == "ja");
         if let Some(top) = results.iter().enumerate().max_by_key(|(i, r)| (score(r), -(*i as i32))).map(|(_, r)| r.clone()) { best = Some(top); break }

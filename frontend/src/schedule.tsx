@@ -4,7 +4,6 @@ import { countdown, useApi, type Airing } from './api.ts'
 import { useList } from './myList.ts'
 import { Hero, ListControls, Notice, SectionTitle } from './ui.tsx'
 
-// Ticks every 30 seconds, for countdowns and the Now line.
 function useNow() {
   const [now, setNow] = useState(Date.now() / 1000)
   useEffect(() => { const t = setInterval(() => setNow(Date.now() / 1000), 30_000); return () => clearInterval(t) }, [])
@@ -13,14 +12,13 @@ function useNow() {
 
 const time = (at: number) => new Date(at * 1000).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 
-// This week, a column per day. Shows on My list can be the only ones shown; the next of them airing is the picture at the top.
 export function Schedule() {
   const from = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime() / 1000 }, [])
   const { data, stale, error, loading } = useApi<{ items: Airing[] }>(`/api/schedule?from=${from}`)
   const list = useList()
   const now = useNow()
   const [mine, setMine] = useState(() => { try { return localStorage.getItem('otaku.onlyMine') === '1' } catch { return false } })
-  const toggle = () => { setMine(!mine); try { localStorage.setItem('otaku.onlyMine', mine ? '0' : '1') } catch { /* this visit only */ } }
+  const toggle = () => { setMine(!mine); try { localStorage.setItem('otaku.onlyMine', mine ? '0' : '1') } catch { } }
   const all = data?.items ?? []
   const ours = all.filter(a => list[a.anime.id])
   const shown = mine ? ours : all

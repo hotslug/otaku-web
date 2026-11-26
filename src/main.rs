@@ -1,4 +1,3 @@
-// Otaku on the web: a small Rust server in front of AniList, serving the React site from frontend/dist.
 
 mod anilist;
 mod tmdb;
@@ -20,12 +19,10 @@ use tower_http::{compression::CompressionLayer, services::{ServeDir, ServeFile}}
 struct App {
     http: reqwest::Client,
     cache: Mutex<HashMap<String, (Instant, Value)>>,
-    gate: Semaphore, // AniList allows ~90 requests a minute (sometimes 30): a few at a time, the rest wait
+    gate: Semaphore,
 }
 
 impl App {
-    // Fresh copy if we have one; otherwise ask AniList. If AniList fails, the last good answer (marked stale) beats an error.
-    // ponytail: unbounded in-memory cache, no request coalescing; add an LRU (or Redis) if traffic ever needs it.
     async fn cached<F: Future<Output = R<Value>>>(&self, key: String, ttl: Duration, fetch: F) -> R<(Value, bool)> {
         if let Some((at, v)) = self.cache.lock().await.get(&key) {
             if at.elapsed() < ttl { return Ok((v.clone(), false)) }
@@ -46,7 +43,7 @@ fn reply(r: R<(Value, bool)>, max_age: u32) -> Response {
             let mut res = Json(v).into_response();
             let h = res.headers_mut();
             h.insert(header::CACHE_CONTROL, HeaderValue::from_str(&format!("public, max-age={max_age}")).unwrap());
-            if stale { h.insert("x-stale", HeaderValue::from_static("1")); } // the site says "showing saved data"
+            if stale { h.insert("x-stale", HeaderValue::from_static("1")); }
             res
         }
         Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))).into_response(),
@@ -78,7 +75,6 @@ async fn detail(State(app): Shared, Path(id): Path<i64>) -> Response {
     reply(r, 3600)
 }
 
-// This week's episodes from `from` (the browser's midnight, unix seconds), a week ahead.
 async fn schedule(State(app): Shared, Query(p): Query<HashMap<String, String>>) -> Response {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
     let Some(from) = p.get("from").and_then(|v| v.parse::<i64>().ok()).filter(|f| (now - 2 * 86_400..=now + 86_400).contains(f)) else {
@@ -90,7 +86,6 @@ async fn schedule(State(app): Shared, Query(p): Query<HashMap<String, String>>) 
     reply(r, 600)
 }
 
-// "Because you liked…" for up to 3 shows: ?ids=1,2
 async fn recommended(State(app): Shared, Query(p): Query<HashMap<String, String>>) -> Response {
     let ids: Vec<i64> = p.get("ids").map(|v| v.split(',').filter_map(|x| x.parse().ok()).filter(|x| (1..100_000_000).contains(x)).collect()).unwrap_or_default();
     if ids.is_empty() || ids.len() > 3 { return bad("1 to 3 ids") }
@@ -101,7 +96,6 @@ async fn recommended(State(app): Shared, Query(p): Query<HashMap<String, String>
     reply(r, 3600)
 }
 
-// Where to watch in one country (?region=GB). Only when the server has a TMDB key.
 async fn watch(State(app): Shared, Path(id): Path<i64>, Query(p): Query<HashMap<String, String>>) -> Response {
     let Some(key) = std::env::var("TMDB_KEY").ok().filter(|k| !k.is_empty()) else {
         return (StatusCode::NOT_FOUND, Json(json!({ "error": "No TMDB key on this server" }))).into_response()
@@ -109,7 +103,6 @@ async fn watch(State(app): Shared, Path(id): Path<i64>, Query(p): Query<HashMap<
     let region = p.get("region").map(|r| r.to_uppercase()).filter(|r| r.len() == 2 && r.chars().all(|c| c.is_ascii_uppercase()));
     let Some(region) = region else { return bad("Bad region") };
     if !(1..100_000_000).contains(&id) { return bad("Bad id") }
-    // The show's titles come from its (cached) AniList page.
     let page = app.cached(format!("anime:{id}"), Duration::from_secs(6 * 3600), async {
         anilist::detail(&app.http, id).await.map(|d| serde_json::to_value(d).unwrap())
     }).await;
@@ -127,7 +120,6 @@ fn bad(why: &str) -> Response { (StatusCode::BAD_REQUEST, Json(json!({ "error": 
 pub const GENRES: [&str; 18] = ["Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy", "Horror", "Mahou Shoujo", "Mecha", "Music",
                                 "Mystery", "Psychological", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller"];
 
-// Everything from the browser is checked against AniList's own names before it goes into a query.
 fn check(p: &HashMap<String, String>) -> Result<Search, String> {
     fn pick(p: &HashMap<String, String>, k: &str, allowed: &[&str]) -> Result<Option<String>, String> {
         match p.get(k).filter(|v| !v.is_empty()) {
@@ -155,7 +147,6 @@ fn check(p: &HashMap<String, String>) -> Result<Search, String> {
     })
 }
 
-// Unix seconds → (year, month), UTC. Days-to-civil from Howard Hinnant's date algorithms; saves a date crate.
 fn year_month(secs: i64) -> (i64, i64) {
     let z = secs.div_euclid(86_400) + 719_468;
     let era = z.div_euclid(146_097);
@@ -175,7 +166,7 @@ async fn main() {
         gate: Semaphore::new(3),
     });
     let dist = std::env::var("OTAKU_DIST").unwrap_or_else(|_| "frontend/dist".into());
-    let site = ServeDir::new(&dist).fallback(ServeFile::new(format!("{dist}/index.html"))); // the React router handles the rest
+    let site = ServeDir::new(&dist).fallback(ServeFile::new(format!("{dist}/index.html")));
     let router = Router::new()
         .route("/api/home", get(home))
         .route("/api/search", get(search))
@@ -199,8 +190,8 @@ mod tests {
     #[test]
     fn year_and_month() {
         assert_eq!(year_month(0), (1970, 1));
-        assert_eq!(year_month(1_795_651_200), (2026, 11)); // 26 Nov 2026
-        assert_eq!(year_month(951_782_400), (2000, 2)); // 29 Feb 2000
+        assert_eq!(year_month(1_795_651_200), (2026, 11));
+        assert_eq!(year_month(951_782_400), (2000, 2));
     }
 
     #[test]

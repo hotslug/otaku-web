@@ -7,11 +7,10 @@ import './styles.css'
 
 function Layout() {
   const { pathname } = useLocation()
-  useEffect(() => { window.scrollTo(0, 0) }, [pathname]) // braces: newer Chrome returns a Promise from scrollTo, and React would call it as a cleanup
-  // Over a page's big picture, the header is see-through until you scroll.
+  useEffect(() => { window.scrollTo(0, 0) }, [pathname])
   const [over, setOver] = useState(false)
   const header = useRef<HTMLElement>(null)
-  useEffect(() => { // pictures that run under the header grow by its real height (it wraps on phones)
+  useEffect(() => {
     const h = header.current!
     const size = new ResizeObserver(() => document.documentElement.style.setProperty('--header-h', `${h.offsetHeight}px`))
     size.observe(h)
@@ -43,28 +42,26 @@ function Layout() {
   )
 }
 
-// Auto (follow the system) → Light → Dark, remembered in this browser. index.html applies it before the first paint.
 const themes = ['auto', 'light', 'dark'] as const
 function ThemeButton() {
   const [theme, setTheme] = useState<string>(() => document.documentElement.dataset.theme ?? 'auto')
   const next = themes[(themes.indexOf(theme as typeof themes[number]) + 1) % themes.length]
   const pick = () => {
     if (next === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = next
-    try { if (next === 'auto') localStorage.removeItem('otaku.theme'); else localStorage.setItem('otaku.theme', next) } catch { /* private window: just this visit */ }
+    try { if (next === 'auto') localStorage.removeItem('otaku.theme'); else localStorage.setItem('otaku.theme', next) } catch { }
     setTheme(next)
   }
   const label = { auto: 'Theme: auto (follows your system)', light: 'Theme: light', dark: 'Theme: dark' }[theme] ?? 'Theme'
   return <button className="chip theme" onClick={pick} title={`${label}. Click for ${next}`} aria-label={`${label}. Click for ${next}`}>{{ auto: '◐', light: '☀︎', dark: '☾' }[theme]}</button>
 }
 
-// Search as you type, after a short pause; the words go into the URL (?q=), keeping any filters.
 function SearchBox() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [text, setText] = useState(params.get('q') ?? '')
   const box = useRef<HTMLInputElement>(null)
-  useEffect(() => { // "/" jumps to the search box, as on many sites
+  useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === '/' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) { e.preventDefault(); box.current?.focus() }
       if (e.key === 'Escape' && e.target === box.current) box.current?.blur()
@@ -82,7 +79,7 @@ function SearchBox() {
       navigate({ pathname: '/', search: next.toString() }, { replace: pathname === '/' })
     }, 450)
     return () => clearTimeout(t)
-  }, [text]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [text])
   return <input ref={box} className="search" type="search" placeholder="Search anime   ( / )" value={text} onChange={e => setText(e.target.value)} aria-label="Search anime" />
 }
 

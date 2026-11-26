@@ -1,4 +1,3 @@
-// AniList's GraphQL API, turned into the small JSON shapes the site uses.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -16,27 +15,27 @@ pub struct Card {
     pub id: i64,
     pub title: String,
     pub native: Option<String>,
-    pub romaji: Option<String>, // for matching on other sites
-    pub start: Option<String>, // "2023-09-29", "2023-09" or "2023"
+    pub romaji: Option<String>,
+    pub start: Option<String>,
     pub status: Option<String>,
     pub episodes: Option<i64>,
     pub format: Option<String>,
-    pub score: Option<i64>, // 0-100
+    pub score: Option<i64>,
     pub genres: Vec<String>,
     pub poster: Option<String>,
-    pub color: Option<String>, // the poster's main colour, for placeholders
+    pub color: Option<String>,
     pub banner: Option<String>,
     pub synopsis: Option<String>,
-    pub synopsis_source: Option<String>, // "(Source: Crunchyroll)" at the end, shown as a credit
+    pub synopsis_source: Option<String>,
     pub trailer: Option<Trailer>,
     pub next_episode: Option<i64>,
-    pub next_airing: Option<i64>, // unix seconds
+    pub next_airing: Option<i64>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Trailer {
     pub id: String,
-    pub site: String, // "youtube" or "dailymotion"
+    pub site: String,
 }
 
 #[derive(Serialize)]
@@ -76,7 +75,6 @@ pub async fn query(http: &reqwest::Client, q: &str, vars: Value) -> R<Value> {
     Ok(v["data"].take())
 }
 
-// All start-page rows in one request. Trending also brings banners and synopses: it feeds the carousel.
 pub async fn home(http: &reqwest::Client, today: (i64, i64)) -> R<Vec<Row>> {
     let (year, month) = today;
     let season = ["WINTER", "SPRING", "SUMMER", "FALL"][((month - 1) / 3) as usize];
@@ -100,7 +98,6 @@ pub async fn home(http: &reqwest::Client, today: (i64, i64)) -> R<Vec<Row>> {
         .filter(|r| !r.items.is_empty()).collect())
 }
 
-// Filters already checked by the caller. Only the ones that are set go into the query (AniList rejects some as null).
 #[derive(Default)]
 pub struct Search { pub q: Option<String>, pub genre: Option<String>, pub year: Option<i64>, pub season: Option<String>, pub format: Option<String>, pub status: Option<String>, pub sort: String, pub page: i64 }
 
@@ -118,7 +115,7 @@ pub async fn search(http: &reqwest::Client, s: &Search) -> R<Vec<Card>> {
     if let Some(f) = &s.format { add("format", "MediaFormat", "format", json!(f)) }
     if let Some(st) = &s.status { add("status", "MediaStatus", "status", json!(st)) }
     match (&s.season, s.year) {
-        (Some(season), Some(y)) => { // a season is AniList's own grouping (a show starting late December can be Winter)
+        (Some(season), Some(y)) => {
             add("season", "MediaSeason", "season", json!(season));
             add("seasonYear", "Int", "seasonYear", json!(y));
         }
@@ -161,7 +158,6 @@ pub async fn detail(http: &reqwest::Client, id: i64) -> R<Detail> {
     })
 }
 
-// MARK: parsing
 
 fn arr(v: &Value) -> &[Value] { v.as_array().map(|a| a.as_slice()).unwrap_or(&[]) }
 fn s(v: &Value, k: &str) -> Option<String> { v[k].as_str().map(str::trim).filter(|t| !t.is_empty()).map(String::from) }
@@ -194,7 +190,7 @@ pub fn card(m: &Value) -> Card {
 }
 
 fn trailer(t: &Value) -> Option<Trailer> {
-    let (id, site) = (s(t, "id")?, s(t, "site")?); // some ids end in a tab: s() trims
+    let (id, site) = (s(t, "id")?, s(t, "site")?);
     ["youtube", "dailymotion"].contains(&site.as_str()).then_some(Trailer { id, site })
 }
 
@@ -207,7 +203,6 @@ pub fn date(d: &Value) -> Option<String> {
     })
 }
 
-// "RELEASING" → "Airing", "TV_SHORT" → "TV short", "SIDE_STORY" → "Side story"
 pub fn nice(x: &str) -> String {
     match x {
         "RELEASING" => "Airing".into(),
@@ -221,7 +216,6 @@ pub fn nice(x: &str) -> String {
     }
 }
 
-// AniList's plain descriptions still carry <br> and <i>.
 pub fn plain(html: &str) -> String {
     let mut out = String::new();
     let mut tag = String::new();
@@ -237,7 +231,6 @@ pub fn plain(html: &str) -> String {
     for (e, c) in [("&quot;", "\""), ("&#039;", "'"), ("&lt;", "<"), ("&gt;", ">"), ("&mdash;", "—"), ("&rsquo;", "’"), ("&nbsp;", " "), ("&amp;", "&")] {
         out = out.replace(e, c);
     }
-    // Trim each line, and at most one blank line between paragraphs.
     let mut text = String::new();
     let mut blank = 0;
     for line in out.lines().map(str::trim) {
@@ -249,7 +242,6 @@ pub fn plain(html: &str) -> String {
     text
 }
 
-// "...adventure.\n\n(Source: Crunchyroll)" → ("...adventure.", Some("Crunchyroll")). Also "[Written by MAL Rewrite]".
 pub fn split_source(text: &str) -> (String, Option<String>) {
     let t = text.trim_end();
     let Some(close) = t.chars().last().filter(|c| *c == ')' || *c == ']') else { return (t.to_string(), None) };
@@ -264,7 +256,6 @@ pub fn split_source(text: &str) -> (String, Option<String>) {
     (body, Some(src.to_string()))
 }
 
-// "Because you liked…": AniList's community picks for a few shows, in one request.
 pub async fn recommended(http: &reqwest::Client, ids: &[i64]) -> R<Vec<Row>> {
     let q: Vec<String> = ids.iter().enumerate().map(|(i, id)| format!(
         "r{i}: Media(id:{id}){{title{{english romaji}} recommendations(sort:RATING_DESC,perPage:20){{nodes{{mediaRecommendation{{type isAdult {CARD} {HERO}}}}}}}}}")).collect();
@@ -280,7 +271,6 @@ pub async fn recommended(http: &reqwest::Client, ids: &[i64]) -> R<Vec<Row>> {
 #[derive(Serialize)]
 pub struct Airing { pub episode: i64, pub at: i64, pub anime: Card }
 
-// Every episode airing in a window (a week is ~5 pages of 50).
 pub async fn schedule(http: &reqwest::Client, from: i64, to: i64) -> R<Vec<Airing>> {
     let q = format!("query($p:Int,$a:Int,$b:Int){{Page(page:$p,perPage:50){{pageInfo{{hasNextPage}} airingSchedules(airingAt_greater:$a,airingAt_lesser:$b,sort:TIME){{episode airingAt media{{isAdult type {CARD} bannerImage}}}}}}}}");
     let mut out = vec![];
@@ -296,7 +286,6 @@ pub async fn schedule(http: &reqwest::Client, from: i64, to: i64) -> R<Vec<Airin
     Ok(out)
 }
 
-// No banner of its own: borrow one from the same series (season 1 for a season 2, the show for its movie…).
 fn borrowed_banner(edges: &[Value]) -> Option<String> {
     let order = ["PREQUEL", "PARENT", "SEQUEL", "SIDE_STORY", "ALTERNATIVE", "SPIN_OFF"];
     edges.iter().filter(|e| anime(&e["node"]))
@@ -304,7 +293,6 @@ fn borrowed_banner(edges: &[Value]) -> Option<String> {
         .min_by_key(|(i, _)| *i).map(|(_, b)| b)
 }
 
-// Anime only (no manga/novels), in watch order: prequels, sequels, then the rest.
 fn related_list(edges: &[Value]) -> Vec<Related> {
     let order = ["PREQUEL", "SEQUEL", "PARENT", "SIDE_STORY", "SPIN_OFF", "ALTERNATIVE", "SUMMARY", "CHARACTER", "OTHER", "COMPILATION", "CONTAINS"];
     let mut out: Vec<(usize, Related)> = edges.iter().filter(|e| anime(&e["node"])).filter_map(|e| {
@@ -319,7 +307,7 @@ fn related_list(edges: &[Value]) -> Vec<Related> {
         };
         Some((order.iter().position(|o| *o == r).unwrap_or(order.len()), Related { relation, anime: a }))
     }).collect();
-    out.sort_by_key(|(i, _)| *i); // stable: AniList's order within a kind
+    out.sort_by_key(|(i, _)| *i);
     out.into_iter().map(|(_, r)| r).collect()
 }
 
@@ -340,7 +328,7 @@ mod tests {
         assert_eq!(c.format.as_deref(), Some("TV short"));
         assert_eq!(c.status.as_deref(), Some("Finished"));
         assert_eq!(c.trailer, Some(Trailer { id: "abc".into(), site: "youtube".into() }));
-        assert_eq!(c.synopsis.as_deref(), Some("Elf mage.\n\n(Source: Crunchyroll)&more")); // not at the end: stays in the text
+        assert_eq!(c.synopsis.as_deref(), Some("Elf mage.\n\n(Source: Crunchyroll)&more"));
     }
 
     #[test]

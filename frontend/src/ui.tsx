@@ -7,7 +7,6 @@ export function SectionTitle({ children, note }: { children: ReactNode; note?: R
   return <h2 className="section-title"><span className="bar" />{children}{note && <small>{note}</small>}</h2>
 }
 
-// A poster card. Its star and + show on hover, or always once set.
 export function CardLink({ a, note }: { a: Card; note?: string }) {
   const e = useList()[a.id]
   return (
@@ -32,7 +31,6 @@ export function CardLink({ a, note }: { a: Card; note?: string }) {
   )
 }
 
-// A row that pages with ‹ › and has no scroll bar.
 export function Row({ title, items, note }: { title: ReactNode; items: Card[]; note?: (a: Card) => string | undefined }) {
   const strip = useRef<HTMLDivElement>(null)
   const [ends, setEnds] = useState({ start: true, end: false })
@@ -57,7 +55,6 @@ export function Row({ title, items, note }: { title: ReactNode; items: Card[]; n
   )
 }
 
-// Wide banner cards for what you're watching, with when the next episode is due.
 export function WideRow({ title, items }: { title: string; items: Card[] }) {
   if (!items.length) return null
   const now = Date.now() / 1000
@@ -84,7 +81,6 @@ export function Grid({ items }: { items: Card[] }) {
   return <div className="grid">{items.map(a => <CardLink key={a.id} a={a} />)}</div>
 }
 
-// Grey shapes with a moving shine while loading, so nothing pops in.
 export function SkeletonRow() {
   return (
     <section className="row">
@@ -107,7 +103,6 @@ export function Facts({ a }: { a: Card }) {
   )
 }
 
-// Watching / Plan to watch / Finished, and the star.
 export function ListControls({ a }: { a: Card }) {
   const e = useList()[a.id]
   return (
@@ -122,7 +117,6 @@ export function ListControls({ a }: { a: Card }) {
   )
 }
 
-// The big picture at the top of a page: banner, a shade for the words, and whatever goes on it.
 export function Hero({ a, children, tall }: { a: Card; children: ReactNode; tall?: boolean }) {
   return (
     <div className={'hero' + (tall ? ' tall' : '')}>
@@ -135,7 +129,6 @@ export function Hero({ a, children, tall }: { a: Card; children: ReactNode; tall
   )
 }
 
-// Trending shows with a banner, moving on every 8 seconds; hovering holds it.
 export function Carousel({ slides }: { slides: { a: Card; note: string }[] }) {
   const [i, setI] = useState(0)
   const [held, setHeld] = useState(false)

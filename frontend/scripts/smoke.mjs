@@ -1,4 +1,3 @@
-// Clicks through the site like a visitor and fails on any page error. Start the server first, then `npm run smoke`.
 import { chromium } from 'playwright'
 
 const base = process.env.OTAKU_URL ?? 'http://localhost:8080'
@@ -6,7 +5,7 @@ const errors = []
 const browser = await chromium.launch({ channel: 'chrome' })
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 page.on('pageerror', e => errors.push(e.message))
-page.on('console', m => { if (m.type() === 'error' && !m.text().includes('404')) errors.push(m.text().split('\n')[0]) }) // 404: no TMDB key
+page.on('console', m => { if (m.type() === 'error' && !m.text().includes('404')) errors.push(m.text().split('\n')[0]) })
 
 const step = async (what, act, expect) => {
   await act()

@@ -13,7 +13,6 @@ const seasonNames = ['WINTER', 'SPRING', 'SUMMER', 'FALL']
 const seasonIcon: Record<string, string> = { WINTER: '❄︎', SPRING: '✿', SUMMER: '☀︎', FALL: '❦' }
 const keys = ['q', 'genre', 'format', 'status', 'sort', 'year', 'season']
 
-// Discover: the carousel and rows, or results when there's a search or a filter. Everything is in the URL, so results can be shared.
 export function Discover() {
   const [params] = useSearchParams()
   const searching = keys.some(k => params.get(k))
@@ -56,7 +55,6 @@ export function Discover() {
   )
 }
 
-// "Because you liked…": two favourites, picked at random each visit so the rows vary, minus shows already on My list.
 function useForYou(off: boolean): RowData[] {
   const list = useList()
   const [picks] = useState(() => Object.values(list).filter(e => e.favourite).map(e => e.anime.id).sort(() => Math.random() - 0.5).slice(0, 2).sort((x, y) => x - y))
@@ -64,9 +62,8 @@ function useForYou(off: boolean): RowData[] {
   return (data?.rows ?? []).map(r => ({ ...r, items: r.items.filter(a => !list[a.id]) })).filter(r => r.items.length >= 3)
 }
 
-// "Surprise me": a random well-rated show that fits the filters and isn't on My list yet.
 async function surprise(params: URLSearchParams, list: List): Promise<Card | undefined> {
-  for (const page of [1 + Math.floor(Math.random() * 5), 1]) { // a random page of the top 200; page 1 if the filters are narrow
+  for (const page of [1 + Math.floor(Math.random() * 5), 1]) {
     const p = new URLSearchParams(params)
     p.delete('q'); p.set('sort', 'POPULARITY_DESC'); p.set('page', String(page))
     const r = await fetch(`/api/search?${p}`).then(r => r.json()).catch(() => ({}))
@@ -75,13 +72,11 @@ async function surprise(params: URLSearchParams, list: List): Promise<Card | und
   }
 }
 
-// "FALL 2026" → one season back or forward.
 function shiftSeason(season: string, year: number, n: number) {
   const i = year * 4 + seasonNames.indexOf(season) + n
   return { season: seasonNames[((i % 4) + 4) % 4], year: Math.floor(i / 4) }
 }
 
-// Filter pills: native selects styled as chips.
 function Filters() {
   const [params, setParams] = useSearchParams()
   const set = (k: string, v: string) => setParams(p => { if (v) p.set(k, v); else p.delete(k); if (k === 'year' && !v) p.delete('season'); return p })
@@ -130,7 +125,6 @@ function Filters() {
   )
 }
 
-// A show's page. The card it was opened from shows at once; the rest fills in.
 export function Show() {
   const id = Number(useParams().id)
   const from = useLocation().state as Card | null
@@ -216,7 +210,6 @@ export function Show() {
   )
 }
 
-// Streaming in the visitor's country, when the server has a TMDB key; nothing at all when it doesn't.
 function InCountry({ id }: { id: number }) {
   const r = region()
   const { data } = useApi<{ watch: Watch | null }>(`/api/anime/${id}/watch?region=${r}`)
@@ -241,7 +234,6 @@ function InCountry({ id }: { id: number }) {
   )
 }
 
-// My list: favourites, then each status. Saved in this browser.
 export function MyList() {
   const list = useList()
   const entries = Object.values(list).sort((x, y) => x.anime.title.localeCompare(y.anime.title))
@@ -250,7 +242,6 @@ export function MyList() {
     ...statuses.filter(s => s !== 'Watching').map(s => ({ title: s, items: entries.filter(e => e.status === s).map(e => e.anime) })),
   ]
   const watching = entries.filter(e => e.status === 'Watching').map(e => e.anime)
-  // The picture at the top: what you're watching, then favourites; shows with a banner only.
   const slides = [...entries.filter(e => e.status === 'Watching'), ...entries.filter(e => e.favourite && e.status !== 'Watching')]
     .filter(e => e.anime.banner).slice(0, 8).map(e => ({ a: e.anime, note: e.status === 'Watching' ? 'Watching' : '★ Favourite' }))
   return (
