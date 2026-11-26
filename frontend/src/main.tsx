@@ -34,12 +34,27 @@ function Layout() {
           <NavLink to="/schedule" className={({ isActive }) => 'chip' + (isActive ? ' active' : '')}>Schedule</NavLink>
           <NavLink to="/list" className={({ isActive }) => 'chip' + (isActive ? ' active' : '')}>My list</NavLink>
         </nav>
+        <ThemeButton />
         <SearchBox />
       </header>
       <Outlet />
       <footer>Anime data from <a href="https://anilist.co" target="_blank" rel="noreferrer">AniList</a>. Not affiliated with any streaming service.</footer>
     </>
   )
+}
+
+// Auto (follow the system) → Light → Dark, remembered in this browser. index.html applies it before the first paint.
+const themes = ['auto', 'light', 'dark'] as const
+function ThemeButton() {
+  const [theme, setTheme] = useState<string>(() => document.documentElement.dataset.theme ?? 'auto')
+  const next = themes[(themes.indexOf(theme as typeof themes[number]) + 1) % themes.length]
+  const pick = () => {
+    if (next === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = next
+    try { if (next === 'auto') localStorage.removeItem('otaku.theme'); else localStorage.setItem('otaku.theme', next) } catch { /* private window: just this visit */ }
+    setTheme(next)
+  }
+  const label = { auto: 'Theme: auto (follows your system)', light: 'Theme: light', dark: 'Theme: dark' }[theme] ?? 'Theme'
+  return <button className="chip theme" onClick={pick} title={`${label}. Click for ${next}`} aria-label={`${label}. Click for ${next}`}>{{ auto: '◐', light: '☀︎', dark: '☾' }[theme]}</button>
 }
 
 // Search as you type, after a short pause; the words go into the URL (?q=), keeping any filters.

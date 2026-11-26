@@ -24,7 +24,7 @@ Find the world's favourite anime and where to watch them. A Rust server in front
 - **Where to watch:** the official streaming sites, plus what's streaming in your country when the server has a TMDB key.
 - **Schedule:** this week's episodes by day, with an "Up next" countdown, a line for now, and a switch to show only your shows.
 - **My list:** Watching, Plan to watch, Finished and Favourites, saved in the browser (no account needed) and kept in step across tabs, with a carousel and wide cards for what you're watching.
-- The header turns see-through over each page's picture, which scrolls at half speed. Loading placeholders instead of pop-in, light and dark mode, and a layout that works on phones.
+- The header turns see-through over each page's picture, which scrolls at half speed. Loading placeholders instead of pop-in, light, dark or auto (follows your system; the header button switches and remembers it), and a layout that works on phones.
 
 ## How it's built
 
