@@ -29,7 +29,7 @@ function read(): List {
   try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} }
 }
 
-let list: List = typeof localStorage === 'undefined' ? {} : read()
+let list: List = read()
 const listeners = new Set<() => void>()
 
 function save(next: List) {

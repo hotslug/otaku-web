@@ -61,6 +61,8 @@ function SearchBox() {
   const { pathname } = useLocation()
   const [text, setText] = useState(params.get('q') ?? '')
   const box = useRef<HTMLInputElement>(null)
+  const latest = useRef({ params, pathname })
+  latest.current = { params, pathname }
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === '/' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) { e.preventDefault(); box.current?.focus() }
@@ -69,11 +71,13 @@ function SearchBox() {
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
   }, [])
-  useEffect(() => setText(params.get('q') ?? ''), [params])
+  const urlQ = params.get('q') ?? ''
+  useEffect(() => setText(urlQ), [urlQ])
   useEffect(() => {
     const q = text.trim()
     if (q === (params.get('q') ?? '') || (q.length > 0 && q.length < 2)) return
     const t = setTimeout(() => {
+      const { params, pathname } = latest.current
       const next = new URLSearchParams(pathname === '/' ? params : undefined)
       if (q) next.set('q', q); else next.delete('q')
       navigate({ pathname: '/', search: next.toString() }, { replace: pathname === '/' })

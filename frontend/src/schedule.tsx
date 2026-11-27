@@ -24,8 +24,9 @@ export function Schedule() {
   const shown = mine ? ours : all
   const next = ours.find(a => a.at > now) ?? all.find(a => a.at > now && a.anime.banner)
   const days = Array.from({ length: 7 }, (_, i) => {
-    const start = from + i * 86400
-    return { start, items: shown.filter(a => a.at >= start && a.at < start + 86400) }
+    const midnight = (n: number) => { const d = new Date(from * 1000); d.setDate(d.getDate() + n); return d.getTime() / 1000 }
+    const start = midnight(i), end = midnight(i + 1)
+    return { start, items: shown.filter(a => a.at >= start && a.at < end) }
   })
   return (
     <>

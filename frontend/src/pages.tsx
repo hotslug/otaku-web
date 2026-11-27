@@ -126,13 +126,18 @@ function Filters() {
 }
 
 export function Show() {
+  const { id } = useParams()
+  return <ShowPage key={id} />
+}
+
+function ShowPage() {
   const id = Number(useParams().id)
   const from = useLocation().state as Card | null
   const { data, stale, error } = useApi<Detail>(Number.isInteger(id) && id > 0 ? `/api/anime/${id}` : null)
   const a: Card | undefined = data ?? (from?.id === id ? from : undefined)
   const [playing, setPlaying] = useState(false)
   const [more, setMore] = useState(false)
-  if (!a) return <main className="page"><Notice error={error ?? (Number.isInteger(id) ? undefined : 'No such anime.')} />{!error && <SkeletonGrid />}</main>
+  if (!a) return <main className="page"><Notice error={error ?? (Number.isInteger(id) && id > 0 ? undefined : 'No such anime.')} />{!error && <SkeletonGrid />}</main>
   const synopsis = a.synopsis ?? ''
   const long = synopsis.length > 600
   return (

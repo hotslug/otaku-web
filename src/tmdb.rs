@@ -46,11 +46,16 @@ pub fn search_terms(titles: &[String]) -> Vec<String> {
 pub async fn watch(http: &reqwest::Client, key: &str, titles: &[String], movie: bool, region: &str) -> R<Option<Watch>> {
     let kind = if movie { "movie" } else { "tv" };
     let mut best: Option<Value> = None;
+    let mut best_score = -1;
     for q in search_terms(titles) {
         let found = get(http, key, &format!("search/{kind}"), &[("query", &q)]).await?;
         let results = found["results"].as_array().cloned().unwrap_or_default();
         let score = |r: &Value| i32::from(r["genre_ids"].as_array().is_some_and(|g| g.contains(&16.into()))) * 2 + i32::from(r["original_language"] == "ja");
-        if let Some(top) = results.iter().enumerate().max_by_key(|(i, r)| (score(r), -(*i as i32))).map(|(_, r)| r.clone()) { best = Some(top); break }
+        if let Some(top) = results.iter().enumerate().max_by_key(|(i, r)| (score(r), -(*i as i32))).map(|(_, r)| r.clone()) {
+            let s = score(&top);
+            if s > best_score { best_score = s; best = Some(top) }
+            if s > 0 { break }
+        }
     }
     let Some(show) = best else { return Ok(None) };
     let id = show["id"].as_i64().unwrap_or(0).to_string();

@@ -120,7 +120,7 @@ pub async fn search(http: &reqwest::Client, s: &Search) -> R<Vec<Card>> {
             add("seasonYear", "Int", "seasonYear", json!(y));
         }
         (_, Some(y)) => {
-            add("from", "FuzzyDateInt", "startDate_greater", json!(y * 10000));
+            add("from", "FuzzyDateInt", "startDate_greater", json!(y * 10000 - 1));
             add("to", "FuzzyDateInt", "startDate_lesser", json!((y + 1) * 10000));
         }
         _ => {}
@@ -278,7 +278,7 @@ pub async fn schedule(http: &reqwest::Client, from: i64, to: i64) -> R<Vec<Airin
         let d = query(http, &q, json!({ "p": p, "a": from, "b": to })).await?;
         for a in arr(&d["Page"]["airingSchedules"]) {
             let m = &a["media"];
-            if m["isAdult"] == true { continue }
+            if !anime(m) { continue }
             if let (Some(episode), Some(at)) = (a["episode"].as_i64(), a["airingAt"].as_i64()) { out.push(Airing { episode, at, anime: card(m) }) }
         }
         if d["Page"]["pageInfo"]["hasNextPage"] != true { break }

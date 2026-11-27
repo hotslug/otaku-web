@@ -81,7 +81,7 @@ async fn schedule(State(app): Shared, Query(p): Query<HashMap<String, String>>) 
         return bad("Bad start time")
     };
     let r = app.cached(format!("schedule:{from}"), Duration::from_secs(30 * 60), async {
-        anilist::schedule(&app.http, from, from + 7 * 86_400).await.map(|a| json!({ "items": a }))
+        anilist::schedule(&app.http, from, from + 7 * 86_400 + 3600).await.map(|a| json!({ "items": a }))
     }).await;
     reply(r, 600)
 }
